@@ -22,7 +22,7 @@
       const box = document.createElement("div");
       box.className = "sb-mod" + (cur && cur.m === m.id ? " open" : "");
       const btn = document.createElement("button");
-      btn.innerHTML = '<span class="num">' + (m.order) + '</span><span>' + esc(m.title) + "</span>";
+      btn.innerHTML = '<span class="num">' + (m.badge || m.order) + '</span><span>' + esc(m.title) + "</span>";
       btn.onclick = () => box.classList.toggle("open");
       const ls = document.createElement("div"); ls.className = "sb-lessons";
       m.lessons.forEach((l) => {
@@ -47,7 +47,7 @@
     const nd = P.due().length, acc = P.accuracy();
     let h = "<h1>Микроструктура рынка</h1>" +
       '<p class="lead">Практический курс для тех, кто уже знает, что такое акции и биржа, но хочет понять, как на самом деле формируется цена, спред и издержки сделки. Теория, формулы, числовые примеры, интерактивные модели, тесты и итоговый проект.</p>' +
-      '<div class="callout key"><span class="t">Как идти по курсу</span>Модули выстроены от простого к сложному. Модуль 0 — справочный: если вы уверенно знаете форварды, опционы и броуновское движение, пропустите его. Каждый урок заканчивается тестом (ответы сохраняются) и списком источников. Подчёркнутые термины в тексте раскрываются по наведению.</div>' +
+      '<div class="callout key"><span class="t">Как идти по курсу</span>Модули выстроены от простого к сложному. Модуль 0 — справочный: если вы уверенно знаете форварды, опционы и броуновское движение, пропустите его. Каждый урок заканчивается тестом (ответы сохраняются) и списком источников. Подчёркнутые термины в тексте раскрываются по наведению. Если формулы читаются тяжело (прошло много лет после школы), начните с модуля Σ: он повторяет математику ровно в том объёме, который нужен для курса.</div>' +
       "<p>Пройдено уроков: <b>" + d + "</b> из " + total + '.</p><div class="bar"><i style="width:' + (total ? (d / total) * 100 : 0) + '%"></i></div>';
     const nxt = allLessons().find((x) => !done[x.l.id]);
     if (nxt) h += '<p><a class="btn" style="text-decoration:none;display:inline-block" href="#/' + nxt.m.id + "/" + nxt.l.id + '">' + (d ? "Продолжить: " : "Начать: ") + esc(nxt.l.title) + "</a></p>";
@@ -70,7 +70,7 @@
     mods().forEach((m) => {
       const t = m.lessons.length, dm = m.lessons.filter((l) => done[l.id]).length, ti = P.testInfo(m.id);
       const first = m.lessons[0] ? "#/" + m.id + "/" + m.lessons[0].id : "#/";
-      h += '<a class="card" href="' + first + '"><span class="pill">Модуль ' + m.order + "</span>" + (m.level ? '<span class="pill">' + esc(m.level) + "</span>" : "") +
+      h += '<a class="card" href="' + first + '"><span class="pill">Модуль ' + (m.badge || m.order) + "</span>" + (m.level ? '<span class="pill">' + esc(m.level) + "</span>" : "") +
         (ti ? '<span class="pill ' + (ti.passed ? "ok" : "") + '">тест ' + Math.round(ti.best * 100) + "%</span>" : "") +
         "<h3>" + esc(m.title) + "</h3><p>" + esc(m.summary || "") + "</p><p>" + t + " ур. · " + esc(m.time || "") + '</p><div class="bar"><i style="width:' + (t ? (dm / t) * 100 : 0) + '%"></i></div></a>';
     });
@@ -82,8 +82,8 @@
     const m = mods().find((x) => x.id === mid); const l = m && m.lessons.find((x) => x.id === lid);
     if (!l) return notFound();
     const list = allLessons(), idx = list.findIndex((x) => x.l.id === lid), prev = list[idx - 1], next = list[idx + 1];
-    let h = '<div class="crumbs"><a href="#/">Курс</a> › Модуль ' + m.order + ". " + esc(m.title) + "</div><h1>" + esc(l.title) + "</h1>" +
-      '<p><span class="pill">' + (l.minutes || 15) + " мин</span>" + (l.level ? '<span class="pill">' + esc(l.level) + "</span>" : "") + '</p><div class="lesson-body">' + l.html + "</div>";
+    let h = '<div class="crumbs"><a href="#/">Курс</a> › Модуль ' + (m.badge || m.order) + ". " + esc(m.title) + "</div><h1>" + esc(l.title) + "</h1>" +
+      '<p><span class="pill">' + (l.minutes || 15) + " мин</span>" + (l.level ? '<span class="pill">' + esc(l.level) + "</span>" : "") + '</p>' + (m.id !== "mm" && l.html.indexOf("$") >= 0 ? '<p class="lab-note">Трудно читать формулы? <a href="#/mm/mm-l1">Повторение математики</a>: с нуля и на примерах из курса.</p>' : "") + '<div class="lesson-body">' + l.html + "</div>";
     h += P.quizHTML(l);
     if (l.sources && l.sources.length) {
       h += '<div class="srcs"><b>Источники урока</b><ul>' + l.sources.map((s) => "<li>" + srcTitle(s.title) + (s.where ? " — " + esc(s.where) : "") + (s.note ? ". " + esc(s.note) : "") + "</li>").join("") + "</ul></div>";
@@ -109,7 +109,7 @@
   }
 
   function glossary() {
-    const terms = mods().flatMap((m) => m.terms.map((t) => Object.assign({ mod: m.order }, t)));
+    const terms = mods().flatMap((m) => m.terms.map((t) => Object.assign({ mod: m.badge || m.order }, t)));
     terms.sort((a, b) => (a.en || "").localeCompare(b.en || ""));
     content.innerHTML = "<h1>Глоссарий</h1><p class=lead>Термины из всех модулей (" + terms.length + ").</p><input class=gl-search placeholder='Поиск по русскому или английскому термину…'><div id=gl></div>";
     const draw = (q) => {

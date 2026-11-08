@@ -157,7 +157,7 @@
     qs = shuffle(qs, rng).slice(0, 10);
     C.app.renderSidebar({ m: mid, l: null });
     session(content, {
-      title: "Итоговый тест: модуль " + m.order, questions: qs, passAt: 0.7, again: "#/test/" + mid, againLabel: "Пересдать",
+      title: "Итоговый тест: модуль " + (m.badge || m.order), questions: qs, passAt: 0.7, again: "#/test/" + mid, againLabel: "Пересдать",
       onFinish: (r) => {
         const t = S.get("tests", {}), old = t[mid] || {};
         t[mid] = { best: Math.max(old.best || 0, r.pct), last: r.pct, passed: !!(old.passed || r.passed), date: Date.now() };

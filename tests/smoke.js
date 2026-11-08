@@ -35,10 +35,10 @@ const text = () => d.getElementById("content").textContent;
   if (!(w.Course && w.Course.app)) return finish();
   const C = w.Course;
   ok(!!w.katex && !!w.renderMathInElement, "KaTeX не загрузился из vendor/");
-  ok(C.modules.length === 11, "модулей " + C.modules.length);
+  ok(C.modules.length === 12, "модулей " + C.modules.length);
 
   await go("#/");
-  ok(d.querySelectorAll(".card").length >= 17, "на главной мало карточек");
+  ok(d.querySelectorAll(".card").length >= 18, "на главной мало карточек");
 
   // все уроки: рендер, формулы, виджеты, крайние значения ползунков, кнопки
   let lessons = 0, sliders = 0, buttons = 0, terms = 0;

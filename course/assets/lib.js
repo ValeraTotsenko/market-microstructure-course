@@ -16,6 +16,8 @@
     const m = Course.modules.find((x) => x.id === id);
     if (!m) throw new Error("Course.extend: нет модуля " + id);
     (ext.lessons || []).forEach((l) => m.lessons.push(l));
+    const n = (l) => +((/l(\d+)$/.exec(l.id) || [])[1] || 0);
+    m.lessons.sort((a, b) => n(a) - n(b));
     (ext.terms || []).forEach((t) => m.terms.push(t));
   };
 

@@ -16,12 +16,12 @@ global.localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem:
 require(path.join(ROOT, "assets", "lib.js"));
 require(path.join(ROOT, "assets", "practice.js"));
 const Sim = require(path.join(ROOT, "assets", "engine.js"));
-for (const f of fs.readdirSync(path.join(ROOT, "modules")).filter((x) => /^(m\d+|ext_[a-z0-9_]+)\.js$/.test(x)).sort((a, b) => (a.startsWith("ext_") - b.startsWith("ext_")) || a.localeCompare(b))) require(path.join(ROOT, "modules", f));
+for (const f of fs.readdirSync(path.join(ROOT, "modules")).filter((x) => /^(m\d+|mm|ext_[a-z0-9_]+)\.js$/.test(x)).sort((a, b) => (a.startsWith("ext_") - b.startsWith("ext_")) || a.localeCompare(b))) require(path.join(ROOT, "modules", f));
 require(path.join(ROOT, "assets", "sources.js"));
 const C = global.Course;
 
 console.log("\nСтруктура курса");
-test("11 модулей, порядок 0…10", () => { assert.strictEqual(C.modules.length, 11); C.modules.forEach((m, i) => assert.strictEqual(m.order, i)); });
+test("12 модулей: математика (Σ) и модули 0…10", () => { assert.strictEqual(C.modules.length, 12); assert.strictEqual(C.modules[0].id, "mm"); C.modules.slice(1).forEach((m, i) => assert.strictEqual(m.order, i)); });
 test("идентификаторы модулей и уроков уникальны", () => {
   const ids = new Set();
   C.modules.forEach((m) => { assert(!ids.has(m.id), "дубль модуля " + m.id); ids.add(m.id); m.lessons.forEach((l) => { assert(!ids.has(l.id), "дубль урока " + l.id); ids.add(l.id); }); });
