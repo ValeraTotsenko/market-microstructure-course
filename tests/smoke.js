@@ -84,9 +84,13 @@ const text = () => d.getElementById("content").textContent;
 
   // лаборатория и проект
   await go("#/lab");
-  const labBtns = [...d.querySelectorAll("#deskA button, #deskB button")]; ok(labBtns.length > 8, "в лаборатории мало кнопок");
-  for (const b of labBtns) { if (b.textContent === "▶ Запустить") continue; b.click(); }
-  for (const r of d.querySelectorAll("#deskA input[type=range], #deskB input[type=range]")) for (const v of [r.min, r.max]) { r.value = v; r.dispatchEvent(new w.Event("input", { bubbles: true })); }
+  const labBtns = [...d.querySelectorAll("#deskA button, #deskB button, #deskC button, #deskD button, #deskE button, #deskF button")]; ok(labBtns.length > 25, "в лаборатории мало кнопок: " + labBtns.length);
+  for (const b of labBtns) { if (b.textContent === "▶ Запустить" || b.classList.contains("adel")) continue; b.click(); }
+  for (const r of d.querySelectorAll("#deskA input[type=range], #deskB input[type=range], #deskC input[type=range], #deskD input[type=range], #deskE input[type=range], #deskF input[type=range]")) for (const v of [r.min, r.max]) { r.value = v; r.dispatchEvent(new w.Event("input", { bubbles: true })); }
+  ok(d.querySelectorAll("#deskC .ladder tr").length > 10, "стакан не нарисован"); ok(/Куплено|Продано|встала в очередь|отменены/.test(d.querySelector("#deskC").textContent), "действия в стакане не отработали");
+  ok(d.querySelectorAll("#deskF tr[data-i]").length >= 10, "в аукционе нет заявок"); ok(/Цена аукциона/.test(d.getElementById("deskF").textContent), "аукцион не рассчитан");
+  for (const c of d.querySelectorAll("#deskF .adel")) { c.click(); break; }
+  ok(/Ошибка стола/.test(text()) === false, "ошибка в одном из столов лаборатории");
   ok(/Ошибка/.test(text()) === false, "лаборатория: ошибка");
   await go("#/project");
   ok(d.querySelectorAll(".stage").length === 4, "в проекте не 4 этапа");

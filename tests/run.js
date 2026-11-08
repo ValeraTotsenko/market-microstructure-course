@@ -16,6 +16,7 @@ global.localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem:
 require(path.join(ROOT, "assets", "lib.js"));
 require(path.join(ROOT, "assets", "practice.js"));
 const Sim = require(path.join(ROOT, "assets", "engine.js"));
+const LOB = require(path.join(ROOT, "assets", "lob.js"));
 for (const f of fs.readdirSync(path.join(ROOT, "modules")).filter((x) => /^(m\d+|mm|ext_[a-z0-9_]+)\.js$/.test(x)).sort((a, b) => (a.startsWith("ext_") - b.startsWith("ext_")) || a.localeCompare(b))) require(path.join(ROOT, "modules", f));
 require(path.join(ROOT, "assets", "sources.js"));
 const C = global.Course;
@@ -150,6 +151,63 @@ test("ошибка возвращает вопрос сразу, верные о
   P.record(id, false); assert.strictEqual(P.srs()[id].box, 0);
 });
 test("точность считается по всем ответам", () => { const a = C.practice.accuracy(); assert(a.n >= 5 && a.ok >= 3); });
+
+console.log("\nДвижок: стакан заявок");
+test("после любого числа шагов лучший bid строго ниже лучшего ask, объёмы положительны", () => {
+  const b = new LOB.Book({ seed: 7 });
+  for (let i = 0; i < 3000; i++) { b.step(); assert(b.bestBid() < b.bestAsk(), "пересечение на шаге " + i); }
+  [b.bids, b.asks].forEach((bk) => bk.forEach((lv) => lv.forEach((o) => assert(o.size > 0))));
+});
+test("детерминированность: один seed — одна история", () => {
+  const a = new LOB.Book({ seed: 4 }), c = new LOB.Book({ seed: 4 }); for (let i = 0; i < 200; i++) { a.step(); c.step(); }
+  assert.deepStrictEqual(a.hist.mid, c.hist.mid);
+});
+test("рыночная заявка проходит по уровням, цена и объём сходятся с лестницей", () => {
+  const b = new LOB.Book({ seed: 5 }), l = b.ladder(10); const total = l.asks.slice(0, 2).reduce((a, x) => a + x.size, 0);
+  const r = b.market("B", total, "me"), expect = l.asks.slice(0, 2).reduce((a, x) => a + x.size * x.price, 0);
+  assert.strictEqual(r.filled, total); near(r.notional, expect, 1e-9); assert.strictEqual(b.me.pos, total); near(b.me.cash, -expect, 1e-9);
+});
+test("приоритет «цена, затем время»: первой исполняется заявка, поставленная раньше", () => {
+  const b = new LOB.Book({ seed: 6, burn: 0 }); b.bids.clear(); b.asks.clear();
+  b._add("B", 99, 3, "o"); const mine = b.limit("B", 99, 2, "me"); b._add("S", 101, 5, "o");
+  assert.strictEqual(b.queueAhead(mine.id), 3);
+  b.market("S", 4, "o");                           // съедает 3 чужих и 1 из моих двух
+  assert.strictEqual(b.me.pos, 1); assert(b.myOrders.has(mine.id)); assert.strictEqual(b.queueAhead(mine.id), 0);
+  b.market("S", 1, "o"); assert.strictEqual(b.me.pos, 2); assert(!b.myOrders.has(mine.id));
+});
+test("моя пересекающая лимитная заявка исполняется сразу, остаток встаёт в очередь", () => {
+  const b = new LOB.Book({ seed: 8, burn: 0 }); b.bids.clear(); b.asks.clear(); b._add("S", 101, 2, "o"); b._add("B", 99, 1, "o");
+  const r = b.limit("B", 101, 5, "me"); assert.strictEqual(r.immediate.filled, 2); assert.strictEqual(r.rested, 3); assert.strictEqual(b.bestBid(), 101);
+});
+test("чужие участники не отменяют мою заявку, а я могу её отменить", () => {
+  const b = new LOB.Book({ seed: 9 }), o = b.limit("B", b.bestBid() - 4, 2, "me");
+  for (let i = 0; i < 20; i++) b.step();
+  assert(b.myOrders.has(o.id), "чужие участники отменили мою заявку"); assert(b.cancel(o.id)); assert(!b.myOrders.has(o.id));
+});
+test("дисбаланс предсказывает направление: после перекоса к bid mid растёт чаще, чем падает, и наоборот", () => {
+  const r = LOB.imbalanceExperiment({ k: 1, h: 5 }, 30000, 1);
+  assert(r[4].up > r[4].down + 0.1, "bid-перекос: " + r[4].up + " vs " + r[4].down); assert(r[0].down > r[0].up + 0.1, "ask-перекос: " + r[0].down + " vs " + r[0].up);
+  for (let i = 1; i < 5; i++) assert(r[i].up >= r[i - 1].up - 0.01, "P(up) должна расти с дисбалансом");
+});
+test("очередь: чем дальше от рынка заявка на покупку, тем реже она исполняется, но тем больше берёт на спреде", () => {
+  const e = (pl) => LOB.queueExperiment({ place: pl, horizon: 300 }, 300, 100), join = e("join"), back1 = e("back1"), back3 = e("back3");
+  assert(join.fillProb > back1.fillProb && back1.fillProb > back3.fillProb, "вероятности " + [join, back1, back3].map((x) => x.fillProb));
+  assert(back3.captured > back1.captured && back1.captured > join.captured, "захваченный спред должен расти с удалением");
+  assert(join.driftUnfilled > 1, "если заявка не исполнилась, цена в среднем ушла вверх");
+});
+test("аукцион: цена максимизирует объём, исполняемые объёмы с двух сторон равны", () => {
+  const o = [{ side: "B", price: 101, qty: 5 }, { side: "B", price: 100, qty: 8 }, { side: "B", price: 99, qty: 10 }, { side: "B", price: 98, qty: 12 }, { side: "B", price: 97, qty: 6 },
+    { side: "S", price: 96, qty: 4 }, { side: "S", price: 98, qty: 7 }, { side: "S", price: 99, qty: 9 }, { side: "S", price: 100, qty: 10 }, { side: "S", price: 102, qty: 8 }];
+  const r = LOB.auction(o, 99); assert.strictEqual(r.price, 99); assert.strictEqual(r.volume, 20);
+  const buy = o.reduce((a, x, i) => a + (x.side === "B" ? r.fills[i] : 0), 0), sell = o.reduce((a, x, i) => a + (x.side === "S" ? r.fills[i] : 0), 0);
+  assert.strictEqual(buy, 20); assert.strictEqual(sell, 20);
+  r.fills.forEach((q, i) => { if (q > 0) assert(o[i].side === "B" ? o[i].price >= r.price : o[i].price <= r.price); });
+  assert.strictEqual(LOB.auction([{ side: "B", price: 90, qty: 5 }, { side: "S", price: 95, qty: 5 }], 92).price, null);
+});
+test("аукцион: рыночные заявки исполняются первыми, при равных вариантах берётся цена ближе к референсной", () => {
+  const o = [{ side: "B", price: null, qty: 3 }, { side: "B", price: 100, qty: 3 }, { side: "S", price: 99, qty: 3 }, { side: "S", price: 100, qty: 3 }];
+  const r = LOB.auction(o, 100); assert.strictEqual(r.volume, 6); assert.strictEqual(r.fills[0], 3); assert.strictEqual(r.price, 100);
+});
 
 console.log("\nПеренос прогресса");
 test("экспорт → проверка → импорт возвращает те же данные", () => {

@@ -138,3 +138,21 @@ td.hl{background:var(--accent-soft);font-weight:700}
 .uses{font-size:13px;color:var(--muted);margin-top:2px}
 a.cite{text-decoration:none;font-size:.92em}
 a.cite:hover{text-decoration:underline}
+/* стакан */
+.book-grid{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:16px;margin:10px 0;align-items:start}
+@media(max-width:700px){.book-grid{grid-template-columns:1fr}}
+.ladder table{display:table;width:100%;margin:0;font-size:13.5px;font-variant-numeric:tabular-nums}
+.ladder th{font-size:12px;color:var(--muted);text-align:center}
+.ladder td{border:0;border-bottom:1px solid var(--line);padding:2px 8px;position:relative}
+.ladder td.pr{text-align:center;font-weight:700;width:90px}
+.ladder td.sz{width:38%}
+.ladder td.sz i{position:absolute;top:2px;bottom:2px;opacity:.28;border-radius:3px}
+.ladder tr.ask td.sz i{right:0;background:var(--c2)}
+.ladder tr.bid td.sz i{left:0;background:var(--c3)}
+.ladder tr.ask td.sz b{position:relative;display:block;text-align:right}
+.ladder tr.bid td.sz b{position:relative}
+.ladder tr.ask td.pr{color:var(--c2)}.ladder tr.bid td.pr{color:var(--c3)}
+.ladder tr.gap td{background:var(--code);text-align:center;font-size:12px;color:var(--muted);padding:3px}
+.ladder .mine{font-size:11px;color:var(--accent);font-weight:700}
+input.qty,.mini input{padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px;width:84px}
+.adel{border:1px solid var(--line);background:none;color:var(--muted);border-radius:6px;cursor:pointer}
