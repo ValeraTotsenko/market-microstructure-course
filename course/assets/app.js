@@ -8,6 +8,9 @@
   const allLessons = () => mods().flatMap((m) => m.lessons.map((l) => ({ m, l })));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  /* «[05] Название» -> ссылка на запись в списке источников */
+  const srcTitle = (t) => { const m = /^\[(\d{1,2})\]\s*(.*)$/.exec(t || ""); return m ? '<a href="#/sources/' + m[1].padStart(2, "0") + '">[' + m[1] + "]</a> " + esc(m[2]) : esc(t); };
+
   /* ---------- боковое меню ---------- */
   function renderSidebar(cur) {
     sidebar.innerHTML = "";
@@ -52,7 +55,8 @@
     h += '<h2>Практика</h2><div class="cards">' +
       '<a class="card" href="#/review"><h3>Повторение' + (nd ? ' <span class="badge">' + nd + "</span>" : "") + "</h3><p>" + (nd ? nd + " вопр. ждут повторения." : "Вопросы из пройденных тестов возвращаются через 1–35 дней.") + (acc.n ? " Точность: " + Math.round(acc.ok / acc.n * 100) + "%." : "") + "</p></a>" +
       '<a class="card" href="#/lab"><h3>Лаборатория</h3><p>Симулятор маркет-мейкера и исполнения крупного ордера: поменяйте параметры и посмотрите, что будет с деньгами.</p></a>' +
-      '<a class="card" href="#/project"><h3>Итоговый проект «Торговая смена»</h3><p>Четыре этапа: издержки, исполнение, котирование, проверка на новых данных.' + (prj ? " Пройдено этапов: " + prj.done + " из " + prj.total + "." : "") + "</p></a></div>";
+      '<a class="card" href="#/project"><h3>Итоговый проект «Торговая смена»</h3><p>Четыре этапа: издержки, исполнение, котирование, проверка на новых данных.' + (prj ? " Пройдено этапов: " + prj.done + " из " + prj.total + "." : "") + "</p></a>" +
+      '<a class="card" href="#/progress"><h3>Мой прогресс</h3><p>Скачайте прогресс в JSON-файл или восстановите его из файла: так его можно сохранить и перенести на другой компьютер.</p></a></div>';
     const paths = [
       ["Быстрый путь (≈ 10 ч)", "Суть без тяжёлой математики: рынок, книга заявок, спред, издержки.", ["m01", "m02", "m03", "m04"]],
       ["Путь маркет-мейкера", "От спреда к модели Avellaneda–Stoikov и оптимальному исполнению.", ["m03", "m05", "m06", "m07"]],
@@ -82,7 +86,7 @@
       '<p><span class="pill">' + (l.minutes || 15) + " мин</span>" + (l.level ? '<span class="pill">' + esc(l.level) + "</span>" : "") + '</p><div class="lesson-body">' + l.html + "</div>";
     h += P.quizHTML(l);
     if (l.sources && l.sources.length) {
-      h += '<div class="srcs"><b>Источники урока</b><ul>' + l.sources.map((s) => "<li>" + esc(s.title) + (s.where ? " — " + esc(s.where) : "") + (s.note ? ". " + esc(s.note) : "") + "</li>").join("") + "</ul></div>";
+      h += '<div class="srcs"><b>Источники урока</b><ul>' + l.sources.map((s) => "<li>" + srcTitle(s.title) + (s.where ? " — " + esc(s.where) : "") + (s.note ? ". " + esc(s.note) : "") + "</li>").join("") + "</ul></div>";
     }
     h += '<p><button class="btn" id="doneBtn">' + (done[lid] ? "✓ Урок пройден (снять отметку)" : "Отметить как пройденный") + "</button></p>";
     const lastOfModule = idx === list.length - 1 || (next && next.m.id !== m.id);
@@ -101,7 +105,7 @@
       try { fn(root); } catch (e) { root.insertAdjacentHTML("beforeend", '<p style="color:var(--bad)">Ошибка виджета: ' + esc(e.message) + "</p>"); console.error(e); }
     });
     renderSidebar({ m: mid, l: lid }); window.scrollTo(0, 0);
-    typeset(() => { try { P.decorateTerms(content.querySelector(".lesson-body")); } catch (e) { console.error(e); } });
+    typeset(() => { try { const b = content.querySelector(".lesson-body"); P.linkCitations(b); P.decorateTerms(b); } catch (e) { console.error(e); } });
   }
 
   function glossary() {
@@ -118,12 +122,31 @@
     renderSidebar(null);
   }
 
-  function sources() {
-    const S = window.COURSE_SOURCES || [];
+  /* Где источник используется: уроки, в чьих «Источниках» он указан или где на него есть [NN] в тексте. */
+  function sourceUsage() {
+    const use = {};
+    mods().forEach((m) => m.lessons.forEach((l) => {
+      const ids = new Set();
+      (l.sources || []).forEach((s) => { const x = /^\[(\d{1,2})\]/.exec(s.title || ""); if (x) ids.add(x[1].padStart(2, "0")); });
+      (l.html.match(/\[\d{1,2}\]/g) || []).forEach((t) => ids.add(t.slice(1, -1).padStart(2, "0")));
+      ids.forEach((id) => (use[id] = use[id] || []).push({ m: m, l: l }));
+    }));
+    return use;
+  }
+  function sources(focus) {
+    const S = window.COURSE_SOURCES || [], use = sourceUsage();
     const groups = {}; S.forEach((s) => (groups[s.group] = groups[s.group] || []).push(s));
-    let h = "<h1>Источники</h1><p class=lead>Материалы из вашей папки «Книги/Исследования», на которых построен курс. Номер — это идентификатор файла в ссылках на уроки.</p>";
-    for (const g in groups) h += "<h2>" + esc(g) + "</h2><ul>" + groups[g].map((s) => "<li><b>[" + s.id + "]</b> " + esc(s.title) + (s.note ? " — <i>" + esc(s.note) + "</i>" : "") + "</li>").join("") + "</ul>";
+    let h = "<h1>Источники</h1><p class=lead>Материалы из вашей папки «Книги/Исследования», на которых построен курс. Номер — это идентификатор файла в ссылках на уроки; у каждого источника ниже перечислены уроки, где он используется. Группа с пометкой «Alpha!» — это шесть статей из исходной подборки; для каждой ниже показано, в каких уроках она разобрана.</p>";
+    for (const g in groups) {
+      const alpha = /alpha/i.test(g);
+      h += "<h2>" + esc(g) + (alpha ? ' <span class="pill alpha">Alpha!</span>' : "") + "</h2><ul class='srclist'>" + groups[g].map((s) => {
+        const u = use[String(s.id).padStart(2, "0")] || [];
+        return '<li id="src-' + String(s.id).padStart(2, "0") + '"><b>[' + s.id + "]</b> " + esc(s.title) + (s.note ? " — <i>" + esc(s.note) + "</i>" : "") +
+          '<div class="uses">' + (u.length ? "В курсе: " + u.map((x) => '<a href="#/' + x.m.id + "/" + x.l.id + '">' + esc(x.l.title) + "</a>").join(" · ") : "Только справочно: в уроках не используется.") + "</div></li>";
+      }).join("") + "</ul>";
+    }
     content.innerHTML = h; renderSidebar(null);
+    if (focus) { const el = document.getElementById("src-" + String(focus).padStart(2, "0")); if (el) { el.classList.add("focus"); el.scrollIntoView({ block: "center" }); } }
   }
 
   function notFound() { content.innerHTML = "<h1>Страница не найдена</h1><p><a href='#/'>На главную</a></p>"; }
@@ -142,7 +165,8 @@
     sidebar.classList.remove("open");
     if (!p.length) return home();
     if (p[0] === "glossary") return glossary();
-    if (p[0] === "sources") return sources();
+    if (p[0] === "sources") return sources(p[1]);
+    if (p[0] === "progress") return P.renderProgress(content);
     if (p[0] === "review") return P.renderReview(content);
     if (p[0] === "test" && p[1]) return P.renderTest(content, p[1]);
     if (Course.pages && Course.pages[p[0]]) { renderSidebar(null); window.scrollTo(0, 0); return Course.pages[p[0]](content, p.slice(1)); }

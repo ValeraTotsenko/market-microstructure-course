@@ -97,7 +97,13 @@ const text = () => d.getElementById("content").textContent;
 
   // глоссарий и источники
   await go("#/glossary"); ok(d.querySelectorAll(".gl-item").length >= 220, "в глоссарии мало терминов");
-  await go("#/sources"); ok(d.querySelectorAll("li").length >= 52, "в источниках мало записей");
+  await go("#/sources"); ok(d.querySelectorAll(".srclist li").length >= 52, "в источниках мало записей");
+  ok(d.querySelector(".pill.alpha"), "нет пометки Alpha!");
+  for (const id of ["01", "02", "03", "04", "05", "06"]) ok(d.querySelectorAll("#src-" + id + " .uses a").length >= 1, "источник [" + id + "] не привязан ни к одному уроку");
+  await go("#/sources/05"); ok(d.getElementById("src-05").classList.contains("focus"), "переход по #/sources/05 не подсветил запись");
+  await go("#/m05/m05-l4"); ok(d.querySelectorAll("a.cite").length > 3, "ссылки [NN] в тексте урока не превратились в ссылки");
+  await go("#/progress");
+  ok(d.getElementById("dl") && d.getElementById("fileIn"), "нет кнопок экспорта/импорта прогресса");
 
   console.log("Уроков: " + lessons + ", ползунков: " + sliders + ", кнопок в виджетах: " + buttons + ", подсказок к терминам: " + terms + ", проверок: " + checks);
   finish();

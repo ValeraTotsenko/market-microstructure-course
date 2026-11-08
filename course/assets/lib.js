@@ -10,6 +10,15 @@
     Course.modules.sort((a, b) => a.order - b.order);
   };
 
+  /* Course.extend(id, {lessons, terms}) — дописать уроки и термины в уже зарегистрированный модуль.
+     Нужен для углублений по отдельным источникам: файлы modules/ext_*.js подключаются после m10.js. */
+  Course.extend = function (id, ext) {
+    const m = Course.modules.find((x) => x.id === id);
+    if (!m) throw new Error("Course.extend: нет модуля " + id);
+    (ext.lessons || []).forEach((l) => m.lessons.push(l));
+    (ext.terms || []).forEach((t) => m.terms.push(t));
+  };
+
   /* ---------- форматирование ---------- */
   Course.fmt.n = (x, d = 2) => (isFinite(x) ? x.toFixed(d).replace(".", ",") : "—");
   Course.fmt.pct = (x, d = 1) => Course.fmt.n(x * 100, d) + "%";

@@ -16,7 +16,7 @@ global.localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem:
 require(path.join(ROOT, "assets", "lib.js"));
 require(path.join(ROOT, "assets", "practice.js"));
 const Sim = require(path.join(ROOT, "assets", "engine.js"));
-for (const f of fs.readdirSync(path.join(ROOT, "modules")).filter((x) => /^m\d+\.js$/.test(x)).sort()) require(path.join(ROOT, "modules", f));
+for (const f of fs.readdirSync(path.join(ROOT, "modules")).filter((x) => /^(m\d+|ext_[a-z0-9_]+)\.js$/.test(x)).sort((a, b) => (a.startsWith("ext_") - b.startsWith("ext_")) || a.localeCompare(b))) require(path.join(ROOT, "modules", f));
 require(path.join(ROOT, "assets", "sources.js"));
 const C = global.Course;
 
@@ -57,6 +57,15 @@ test("номера источников [NN] в уроках есть в спи�
   const bad = [];
   C.modules.forEach((m) => m.lessons.forEach((l) => { (l.sources || []).forEach((s) => { const mm = /\[(\d{1,2})\]/.exec(s.title || ""); if (mm && !known.has(mm[1].padStart(2, "0"))) bad.push(l.id + " → [" + mm[1] + "]"); }); }));
   assert(!bad.length, "неизвестные источники: " + bad.join(", "));
+});
+test("каждая статья группы Alpha! ([01]–[06]) разобрана минимум в одном уроке с виджетом, а углублённые — в отдельном уроке", () => {
+  const deep = { "01": "m08-l6", "03": "m06-l6", "04": "m05-l7", "05": "m05-l6" };
+  const lessons = {}; C.modules.forEach((m) => m.lessons.forEach((l) => (lessons[l.id] = l)));
+  ["01", "02", "03", "04", "05", "06"].forEach((id) => {
+    const cited = Object.values(lessons).filter((l) => (l.sources || []).some((s) => (s.title || "").startsWith("[" + id + "]")) && Object.keys(l.widgets || {}).length);
+    assert(cited.length >= 1, "[" + id + "]: нет урока с виджетом");
+    if (deep[id]) { assert(lessons[deep[id]], "нет урока " + deep[id]); assert(lessons[deep[id]].sources[0].title.startsWith("[" + id + "]"), deep[id] + ": первый источник должен быть [" + id + "]"); assert(Object.keys(lessons[deep[id]].widgets).length >= 2, deep[id] + ": меньше двух виджетов"); assert(lessons[deep[id]].quiz.length >= 5, deep[id] + ": меньше 5 вопросов"); }
+  });
 });
 test("общее число уроков и терминов не уменьшилось", () => {
   const lessons = C.modules.reduce((a, m) => a + m.lessons.length, 0), terms = C.modules.reduce((a, m) => a + m.terms.length, 0);
@@ -141,6 +150,30 @@ test("ошибка возвращает вопрос сразу, верные о
   P.record(id, false); assert.strictEqual(P.srs()[id].box, 0);
 });
 test("точность считается по всем ответам", () => { const a = C.practice.accuracy(); assert(a.n >= 5 && a.ok >= 3); });
+
+console.log("\nПеренос прогресса");
+test("экспорт → проверка → импорт возвращает те же данные", () => {
+  const P = C.practice; localStorage.setItem("ms.done", JSON.stringify({ "m01-l1": true })); localStorage.setItem("ms.quiz", JSON.stringify({ "m01-l1": { 0: 1 } }));
+  const e = JSON.parse(JSON.stringify(P.exportProgress())), v = P.validateProgress(e);
+  assert(v.ok, v.error); assert.deepStrictEqual(v.data.done, { "m01-l1": true });
+  localStorage.removeItem = localStorage.removeItem || ((k) => { delete store[k]; });
+  delete store["ms.done"]; P.applyProgress(v.data, "replace");
+  assert.deepStrictEqual(JSON.parse(localStorage.getItem("ms.done")), { "m01-l1": true });
+});
+test("проверка отклоняет чужие и повреждённые файлы", () => {
+  const P = C.practice, bad = [null, [], {}, { app: "x" }, { app: "ms-course", version: 2, data: {} }, { app: "ms-course", version: 1, data: { done: { a: 5 } } },
+    { app: "ms-course", version: 1, data: { quiz: { a: { 0: "x" } } } }, { app: "ms-course", version: 1, data: { srs: { a: { box: 1 } } } }, { app: "ms-course", version: 1, data: { project: { s9: { score: 1 } } } }, { app: "ms-course", version: 1, data: { theme: "red" } }];
+  bad.forEach((b, i) => assert(!P.validateProgress(b).ok, "принят плохой файл №" + i));
+  assert(P.validateProgress({ app: "ms-course", version: 1, data: { evil: 1, done: {} } }).ok);
+  assert(!("evil" in P.validateProgress({ app: "ms-course", version: 1, data: { evil: 1 } }).data), "лишние ключи должны отбрасываться");
+});
+test("слияние: уроки складываются, из результатов берётся лучший, ответы не теряются", () => {
+  const P = C.practice, a = { done: { x: true }, quiz: { l1: { 0: 1 } }, srs: { q: { box: 1, n: 2, ok: 1, due: 5 } }, tests: { m1: { best: 0.5, last: 0.5, passed: false, date: 1 } }, project: { s1: { score: 40, passed: false } } },
+    b = { done: { y: true }, quiz: { l1: { 0: 2, 1: 3 }, l2: { 0: 0 } }, srs: { q: { box: 3, n: 6, ok: 5, due: 9 } }, tests: { m1: { best: 0.9, last: 0.9, passed: true, date: 2 } }, project: { s1: { score: 90, passed: true }, s2: { score: 10, passed: false } } };
+  const m = P.mergeProgress(a, b);
+  assert.deepStrictEqual(m.done, { x: true, y: true }); assert.strictEqual(m.quiz.l1[0], 1); assert.strictEqual(m.quiz.l1[1], 3); assert.strictEqual(m.quiz.l2[0], 0);
+  assert.strictEqual(m.srs.q.n, 6); assert.strictEqual(m.tests.m1.best, 0.9); assert(m.tests.m1.passed); assert.strictEqual(m.project.s1.score, 90); assert(m.project.s1.passed); assert(m.project.s2);
+});
 
 console.log("\nОфлайн и сборка");
 test("index.html не тянет ничего из интернета и все локальные файлы существуют", () => {

@@ -131,3 +131,10 @@ table.mini td,table.mini th{padding:4px 8px}
 td.hl{background:var(--accent-soft);font-weight:700}
 .report{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:6px 20px 18px}
 @media(max-width:600px){.field{grid-template-columns:1fr}.top-links{flex-wrap:wrap;gap:6px 10px}.topbar{flex-wrap:wrap}}
+
+.pill.alpha{background:var(--warn-soft);color:var(--warn);font-weight:600}
+.srclist{padding-left:18px}.srclist li{margin:8px 0;padding:4px 8px;border-radius:8px}
+.srclist li.focus{background:var(--accent-soft);outline:2px solid var(--accent)}
+.uses{font-size:13px;color:var(--muted);margin-top:2px}
+a.cite{text-decoration:none;font-size:.92em}
+a.cite:hover{text-decoration:underline}

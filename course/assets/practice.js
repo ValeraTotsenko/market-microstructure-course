@@ -166,6 +166,136 @@
     });
   };
 
+  /* ---------- перенос прогресса: экспорт, проверка, слияние, страница ---------- */
+  const KEYS = ["done", "quiz", "srs", "tests", "project", "theme"];
+  const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+  const num = (x) => typeof x === "number" && isFinite(x);
+  P.exportProgress = function () {
+    const data = {}; KEYS.forEach((k) => { const v = S.get(k, null); if (v != null) data[k] = v; });
+    return { app: "ms-course", version: 1, exportedAt: new Date().toISOString(), data: data };
+  };
+  /* Проверка структуры файла: возвращает {ok, error, data} с очищенными данными (неизвестные ключи отбрасываются). */
+  P.validateProgress = function (obj) {
+    if (!isObj(obj) || obj.app !== "ms-course") return { ok: false, error: "Это не файл прогресса курса (нет метки app)." };
+    if (obj.version !== 1) return { ok: false, error: "Неизвестная версия файла: " + obj.version };
+    if (!isObj(obj.data)) return { ok: false, error: "В файле нет раздела data." };
+    const d = obj.data, out = {};
+    if ("done" in d) { if (!isObj(d.done) || Object.values(d.done).some((v) => v !== true)) return { ok: false, error: "Раздел done повреждён." }; out.done = d.done; }
+    if ("quiz" in d) {
+      if (!isObj(d.quiz)) return { ok: false, error: "Раздел quiz повреждён." };
+      for (const k in d.quiz) if (!isObj(d.quiz[k]) || Object.values(d.quiz[k]).some((v) => !Number.isInteger(v) || v < 0 || v > 20)) return { ok: false, error: "Раздел quiz повреждён (урок " + k + ")." };
+      out.quiz = d.quiz;
+    }
+    if ("srs" in d) {
+      if (!isObj(d.srs)) return { ok: false, error: "Раздел srs повреждён." };
+      for (const k in d.srs) { const r = d.srs[k]; if (!isObj(r) || !num(r.box) || !num(r.n) || !num(r.ok) || (r.due != null && !num(r.due))) return { ok: false, error: "Раздел srs повреждён (" + k + ")." }; }
+      out.srs = d.srs;
+    }
+    if ("tests" in d) {
+      if (!isObj(d.tests)) return { ok: false, error: "Раздел tests повреждён." };
+      for (const k in d.tests) { const r = d.tests[k]; if (!isObj(r) || !num(r.best)) return { ok: false, error: "Раздел tests повреждён (" + k + ")." }; }
+      out.tests = d.tests;
+    }
+    if ("project" in d) {
+      if (!isObj(d.project)) return { ok: false, error: "Раздел project повреждён." };
+      for (const k in d.project) { const r = d.project[k]; if (!/^s[1-4]$/.test(k) || !isObj(r) || !num(r.score)) return { ok: false, error: "Раздел project повреждён (" + k + ")." }; }
+      out.project = d.project;
+    }
+    if ("theme" in d) { if (d.theme !== "light" && d.theme !== "dark") return { ok: false, error: "Раздел theme повреждён." }; out.theme = d.theme; }
+    return { ok: true, data: out };
+  };
+  /* Слияние двух наборов: ничего не теряем, при конфликте берём лучшее/более подробное. */
+  P.mergeProgress = function (a, b) {
+    const m = {};
+    if (a.done || b.done) m.done = Object.assign({}, a.done, b.done);
+    if (a.quiz || b.quiz) {
+      m.quiz = {};
+      [a.quiz || {}, b.quiz || {}].forEach((src, i) => { for (const l in src) { m.quiz[l] = m.quiz[l] || {}; for (const q in src[l]) if (i === 0 || m.quiz[l][q] == null) m.quiz[l][q] = src[l][q]; } });
+    }
+    if (a.srs || b.srs) {
+      m.srs = Object.assign({}, a.srs);
+      for (const k in (b.srs || {})) if (!m.srs[k] || b.srs[k].n > m.srs[k].n) m.srs[k] = b.srs[k];
+    }
+    if (a.tests || b.tests) {
+      m.tests = Object.assign({}, a.tests);
+      for (const k in (b.tests || {})) { const x = m.tests[k], y = b.tests[k]; m.tests[k] = !x ? y : { best: Math.max(x.best, y.best), last: (y.date || 0) > (x.date || 0) ? y.last : x.last, passed: !!(x.passed || y.passed), date: Math.max(x.date || 0, y.date || 0) }; }
+    }
+    if (a.project || b.project) {
+      m.project = Object.assign({}, a.project);
+      for (const k in (b.project || {})) { const x = m.project[k], y = b.project[k]; if (!x || y.score > x.score) m.project[k] = Object.assign({}, y, { passed: !!(y.passed || (x && x.passed)) }); else m.project[k] = Object.assign({}, x, { passed: !!(x.passed || y.passed) }); }
+    }
+    const th = a.theme || b.theme; if (th) m.theme = th;
+    return m;
+  };
+  P.applyProgress = function (data, mode) {
+    const cur = {}; KEYS.forEach((k) => { const v = S.get(k, null); if (v != null) cur[k] = v; });
+    const next = mode === "merge" ? P.mergeProgress(cur, data) : data;
+    KEYS.forEach((k) => { if (k in next) S.set(k, next[k]); else { try { localStorage.removeItem("ms." + k); } catch (e) {} } });
+  };
+  P.progressStats = function (data) {
+    const q = data.quiz || {}; let answered = 0; Object.keys(q).forEach((l) => (answered += Object.keys(q[l]).length));
+    const pr = data.project || {};
+    return { lessons: Object.keys(data.done || {}).length, answers: answered, cards: Object.keys(data.srs || {}).length,
+      tests: Object.values(data.tests || {}).filter((t) => t.passed).length, stages: Object.values(pr).filter((s) => s.passed).length };
+  };
+  P.renderProgress = function (content) {
+    const A = C.app;
+    const line = (s) => s.lessons + " ур. пройдено · " + s.answers + " ответов на тесты · " + s.cards + " вопросов в повторении · итоговых тестов сдано: " + s.tests + " · этапов проекта: " + s.stages;
+    content.innerHTML = "<h1>Мой прогресс</h1><p class=lead>У курса нет сервера, поэтому прогресс хранится только в этом браузере. Скачайте его в файл, чтобы сохранить копию или перенести на другой компьютер, и загрузите обратно, когда понадобится.</p>" +
+      '<div class="stage"><h2>Сейчас в браузере</h2><p id="curStat"></p><p><button class="btn" id="dl">Скачать прогресс (JSON)</button></p></div>' +
+      '<div class="stage"><h2>Восстановить из файла</h2><p><input type="file" id="fileIn" accept=".json,application/json"></p><div id="filePreview" class="lab-note"></div>' +
+      '<p id="applyRow" style="display:none"><button class="btn" id="merge">Объединить с текущим</button> <button class="btn ghost" id="replace">Заменить текущий</button></p>' +
+      '<p class="lab-note">«Объединить» ничего не удаляет: пройденные уроки складываются, из двух результатов теста и проекта берётся лучший. «Заменить» оставляет ровно то, что в файле.</p><div id="applyMsg" class="verdict"></div></div>' +
+      '<div class="stage"><h2>Начать заново</h2><p><button class="btn ghost" id="wipe">Стереть весь прогресс</button></p></div>';
+    const cur = () => { const e = P.exportProgress(); return e.data; };
+    content.querySelector("#curStat").textContent = line(P.progressStats(cur()));
+    content.querySelector("#dl").onclick = () => {
+      try {
+        const e = P.exportProgress(), name = "microstructure-progress-" + e.exportedAt.slice(0, 10) + ".json";
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(e, null, 2)], { type: "application/json" })); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+      } catch (err) { content.querySelector("#curStat").textContent += " (не удалось создать файл: " + err.message + ")"; }
+    };
+    let pending = null; const msg = content.querySelector("#applyMsg"), prev = content.querySelector("#filePreview"), row = content.querySelector("#applyRow");
+    content.querySelector("#fileIn").onchange = (ev) => {
+      const f = ev.target.files[0]; pending = null; row.style.display = "none"; msg.textContent = ""; msg.className = "verdict";
+      if (!f) { prev.textContent = ""; return; }
+      if (f.size > 2000000) { prev.textContent = "Файл слишком большой для прогресса (больше 2 МБ)."; return; }
+      const rd = new FileReader();
+      rd.onload = () => {
+        let obj; try { obj = JSON.parse(rd.result); } catch (e) { prev.textContent = "Не удалось прочитать файл: это не JSON."; return; }
+        const v = P.validateProgress(obj);
+        if (!v.ok) { prev.textContent = v.error; return; }
+        pending = v.data; prev.textContent = "В файле (" + (obj.exportedAt ? obj.exportedAt.slice(0, 10) : "дата неизвестна") + "): " + line(P.progressStats(v.data)); row.style.display = "";
+      };
+      rd.readAsText(f);
+    };
+    const apply = (mode) => { if (!pending) return; P.applyProgress(pending, mode); msg.className = "verdict ok"; msg.textContent = "Готово. Страница перезагрузится."; setTimeout(() => { location.hash = "#/progress"; location.reload(); }, 600); };
+    content.querySelector("#merge").onclick = () => apply("merge");
+    content.querySelector("#replace").onclick = () => { if (confirm("Заменить текущий прогресс содержимым файла?")) apply("replace"); };
+    content.querySelector("#wipe").onclick = () => { if (confirm("Стереть весь прогресс в этом браузере? Сначала лучше скачать копию.")) { KEYS.forEach((k) => { try { localStorage.removeItem("ms." + k); } catch (e) {} }); location.hash = "#/progress"; location.reload(); } };
+    A.renderSidebar(null);
+  };
+
+  /* ---------- ссылки [NN] на страницу источников ---------- */
+  P.linkCitations = function (root) {
+    const known = {}; (window.COURSE_SOURCES || []).forEach((s) => (known[String(s.id).padStart(2, "0")] = 1));
+    const skip = "h1,h2,h3,h4,code,pre,.katex,.widget,.quiz,.term,button,a,script,style";
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), list = []; let n;
+    while ((n = w.nextNode())) if (/\[\d{1,2}\]/.test(n.data) && !n.parentElement.closest(skip)) list.push(n);
+    list.forEach((node) => {
+      const frag = document.createDocumentFragment(); let last = 0, hit = false; const re = /\[(\d{1,2})\]/g; let m;
+      while ((m = re.exec(node.data))) {
+        const id = m[1].padStart(2, "0"); if (!known[id]) continue;
+        frag.appendChild(document.createTextNode(node.data.slice(last, m.index)));
+        const a = document.createElement("a"); a.href = "#/sources/" + id; a.className = "cite"; a.textContent = m[0]; a.title = "Открыть в списке источников";
+        frag.appendChild(a); last = m.index + m[0].length; hit = true;
+      }
+      if (!hit) return;
+      frag.appendChild(document.createTextNode(node.data.slice(last))); node.parentNode.replaceChild(frag, node);
+    });
+  };
+
   /* ---------- определения терминов в тексте уроков ---------- */
   let terms = null;
   const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
