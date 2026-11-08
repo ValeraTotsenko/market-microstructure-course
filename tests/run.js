@@ -209,6 +209,48 @@ test("аукцион: рыночные заявки исполняются пе�
   const r = LOB.auction(o, 100); assert.strictEqual(r.volume, 6); assert.strictEqual(r.fills[0], 3); assert.strictEqual(r.price, 100);
 });
 
+console.log("\nПоиск по курсу");
+require(path.join(ROOT, "assets", "search.js"));
+const first = (q, n) => C.search.search(q, n || 5).lessons.map((x) => x.doc.id);
+test("поиск находит нужные уроки на первых местах", () => {
+  assert(first("закон квадратного корня", 3).includes("m04-l2"), "закон квадратного корня → " + first("закон квадратного корня", 3));
+  assert(first("Glosten Milgrom", 3).includes("m03-l3"), "Glosten Milgrom → " + first("Glosten Milgrom", 3));
+  assert(first("Almgren Chriss", 3).includes("m06-l2"), "Almgren Chriss → " + first("Almgren Chriss", 3));
+  assert(first("спуфинг", 3).some((id) => id.startsWith("m08")), "спуфинг → " + first("спуфинг", 3));
+  assert(first("производная", 3).some((id) => id.startsWith("mm-")), "производная → " + first("производная", 3));
+  assert(first("Хоукса", 3).some((id) => id.startsWith("m07")), "Хоукса → " + first("Хоукса", 3));
+});
+test("морфология: формы слова находят один и тот же урок", () => {
+  const a = first("спред", 8), b = first("спреды", 8), c = first("спреда", 8);
+  assert(a.includes("m03-l1") && b.includes("m03-l1") && c.includes("m03-l1"), [a, b, c].join(" | "));
+});
+test("пустой и бессмысленный запрос ничего не находит и не падает", () => {
+  assert.strictEqual(first("x").length, 0); assert.strictEqual(first("").length, 0); assert.strictEqual(first("qwertyzzz").length, 0);
+});
+test("поиск возвращает термины глоссария и безопасный фрагмент с подсветкой", () => {
+  const r = C.search.search("adverse selection", 3); assert(r.terms.length >= 1, "нет терминов"); assert(r.lessons.length >= 1);
+  assert(/<mark>/.test(r.lessons[0].snippet), "нет подсветки"); assert(!/<script/i.test(r.lessons[0].snippet));
+});
+test("формулы не попадают в индекс как текст", () => {
+  assert.strictEqual(C.search._plain("слово $x^2+y$ ещё $$\\frac{a}{b}$$ тут").replace(/\s+/g, " "), "слово ещё тут");
+});
+
+console.log("\nПредварительные условия");
+require(path.join(ROOT, "assets", "prereq.js"));
+test("все ссылки предварительных условий указывают на существующие уроки раньше по порядку чтения", () => {
+  const order = []; C.modules.forEach((m) => m.lessons.forEach((l) => order.push(l.id)));
+  const pos = {}; order.forEach((id, i) => (pos[id] = i));
+  Object.keys(C.prereq).forEach((id) => {
+    assert(id in pos, "нет урока " + id);
+    C.prereq[id].forEach((p) => { assert(p[0] in pos, id + " → нет урока " + p[0]); assert(pos[p[0]] < pos[id], id + " ссылается вперёд на " + p[0]); assert(p[0] !== id && p[1] && p[1].length > 3, id + ": пустая причина"); });
+  });
+});
+test("каждый урок после первого в модуле имеет предварительные условия", () => {
+  const miss = []; C.modules.forEach((m) => m.lessons.forEach((l, i) => { if (i > 0 && !C.prereq[l.id]) miss.push(l.id); }));
+  const allowed = ["mm-l1", "m10-l6"]; const bad = miss.filter((id) => !allowed.includes(id));
+  assert(!bad.length, "нет условий у: " + bad.join(", "));
+});
+
 console.log("\nПеренос прогресса");
 test("экспорт → проверка → импорт возвращает те же данные", () => {
   const P = C.practice; localStorage.setItem("ms.done", JSON.stringify({ "m01-l1": true })); localStorage.setItem("ms.quiz", JSON.stringify({ "m01-l1": { 0: 1 } }));

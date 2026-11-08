@@ -108,6 +108,12 @@ const text = () => d.getElementById("content").textContent;
   await go("#/m05/m05-l4"); ok(d.querySelectorAll("a.cite").length > 3, "ссылки [NN] в тексте урока не превратились в ссылки");
   await go("#/progress");
   ok(d.getElementById("dl") && d.getElementById("fileIn"), "нет кнопок экспорта/импорта прогресса");
+  await go("#/search/" + encodeURIComponent("резервная цена"));
+  ok(d.querySelectorAll(".sres").length >= 3, "поиск по курсу не нашёл уроки"); ok(d.querySelector("#sres .gl-item"), "поиск не показал термин глоссария");
+  ok(d.querySelector("#topSearch input"), "нет поля поиска в верхней панели");
+  d.querySelector(".sres .stitle").click(); await sleep(60);
+  ok(d.querySelector("details.prereq") && d.querySelectorAll("details.prereq li").length >= 2, "нет блока «Что нужно знать»");
+  await go("#/m05/m05-l2"); ok(d.querySelector("details.prereq li a"), "в уроке нет ссылок предварительных условий");
 
   console.log("Уроков: " + lessons + ", ползунков: " + sliders + ", кнопок в виджетах: " + buttons + ", подсказок к терминам: " + terms + ", проверок: " + checks);
   finish();

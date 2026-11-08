@@ -156,3 +156,19 @@ a.cite:hover{text-decoration:underline}
 .ladder .mine{font-size:11px;color:var(--accent);font-weight:700}
 input.qty,.mini input{padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px;width:84px}
 .adel{border:1px solid var(--line);background:none;color:var(--muted);border-radius:6px;cursor:pointer}
+/* поиск и предварительные условия */
+.top-search{flex:1;max-width:280px;min-width:120px}
+.top-search input{width:100%;padding:5px 10px;border:1px solid var(--line);border-radius:99px;background:var(--bg);color:var(--ink);font-size:14px}
+.sform{margin:8px 0 4px}
+.sres{padding:10px 0;border-bottom:1px solid var(--line)}
+.sres .stitle{font-weight:700;font-size:16.5px;text-decoration:none}
+.sres .swhere{font-size:12.5px;color:var(--muted)}
+.sres .ssnip{font-size:14.5px;margin-top:3px}
+mark{background:#ffe27a;color:#1d2330;border-radius:3px;padding:0 1px}
+:root[data-theme=dark] mark{background:#6b5a14;color:#fff}
+details.prereq{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 14px;margin:10px 0}
+details.prereq summary{cursor:pointer;font-size:14px;font-weight:600}
+details.prereq ul{margin:6px 0 2px;padding-left:20px;font-size:14px}
+details.prereq li.ok::marker{content:"✓  ";color:var(--good)}
+details.prereq li.todo::marker{content:"○  ";color:var(--muted)}
+@media(max-width:600px){.top-search{order:3;flex-basis:100%;max-width:none}}

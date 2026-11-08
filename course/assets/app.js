@@ -8,6 +8,16 @@
   const allLessons = () => mods().flatMap((m) => m.lessons.map((l) => ({ m, l })));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  /* Блок «Что нужно знать»: рекомендуемые предыдущие уроки (Course.prereq) с отметкой, пройдены ли они */
+  function prereqHTML(lid) {
+    const list = (Course.prereq || {})[lid]; if (!list || !list.length) return "";
+    const items = list.map((p) => { const x = allLessons().find((y) => y.l.id === p[0]); return x ? { x: x, why: p[1], ok: !!done[p[0]] } : null; }).filter(Boolean);
+    if (!items.length) return "";
+    const left = items.filter((i) => !i.ok).length;
+    return '<details class="prereq"' + (left ? " open" : "") + "><summary>Что нужно знать до этого урока · " + (left ? "не пройдено: " + left + " из " + items.length : "всё пройдено") + "</summary><ul>" +
+      items.map((i) => '<li class="' + (i.ok ? "ok" : "todo") + '"><a href="#/' + i.x.m.id + "/" + i.x.l.id + '">' + esc(i.x.l.title) + "</a> — " + esc(i.why) + "</li>").join("") +
+      '</ul><div class="lab-note">Это рекомендация: если тема знакома, урок можно пропустить.</div></details>';
+  }
   /* «[05] Название» -> ссылка на запись в списке источников */
   const srcTitle = (t) => { const m = /^\[(\d{1,2})\]\s*(.*)$/.exec(t || ""); return m ? '<a href="#/sources/' + m[1].padStart(2, "0") + '">[' + m[1] + "]</a> " + esc(m[2]) : esc(t); };
 
@@ -16,7 +26,7 @@
     sidebar.innerHTML = "";
     const tools = document.createElement("div"); tools.className = "sb-tools";
     const nd = P.due().length;
-    tools.innerHTML = '<a href="#/review">Повторение' + (nd ? ' <span class="badge">' + nd + "</span>" : "") + '</a><a href="#/lab">Лаборатория</a><a href="#/project">Итоговый проект</a>';
+    tools.innerHTML = '<a href="#/review">Повторение' + (nd ? ' <span class="badge">' + nd + "</span>" : "") + '</a><a href="#/search">Поиск</a><a href="#/lab">Лаборатория</a><a href="#/project">Итоговый проект</a><a href="#/progress">Мой прогресс</a>';
     sidebar.appendChild(tools);
     mods().forEach((m) => {
       const box = document.createElement("div");
@@ -83,7 +93,7 @@
     if (!l) return notFound();
     const list = allLessons(), idx = list.findIndex((x) => x.l.id === lid), prev = list[idx - 1], next = list[idx + 1];
     let h = '<div class="crumbs"><a href="#/">Курс</a> › Модуль ' + (m.badge || m.order) + ". " + esc(m.title) + "</div><h1>" + esc(l.title) + "</h1>" +
-      '<p><span class="pill">' + (l.minutes || 15) + " мин</span>" + (l.level ? '<span class="pill">' + esc(l.level) + "</span>" : "") + '</p>' + (m.id !== "mm" && l.html.indexOf("$") >= 0 ? '<p class="lab-note">Трудно читать формулы? <a href="#/mm/mm-l1">Повторение математики</a>: с нуля и на примерах из курса.</p>' : "") + '<div class="lesson-body">' + l.html + "</div>";
+      '<p><span class="pill">' + (l.minutes || 15) + " мин</span>" + (l.level ? '<span class="pill">' + esc(l.level) + "</span>" : "") + '</p>' + prereqHTML(lid) + (m.id !== "mm" && l.html.indexOf("$") >= 0 ? '<p class="lab-note">Трудно читать формулы? <a href="#/mm/mm-l1">Повторение математики</a>: с нуля и на примерах из курса.</p>' : "") + '<div class="lesson-body">' + l.html + "</div>";
     h += P.quizHTML(l);
     if (l.sources && l.sources.length) {
       h += '<div class="srcs"><b>Источники урока</b><ul>' + l.sources.map((s) => "<li>" + srcTitle(s.title) + (s.where ? " — " + esc(s.where) : "") + (s.note ? ". " + esc(s.note) : "") + "</li>").join("") + "</ul></div>";
@@ -105,7 +115,7 @@
       try { fn(root); } catch (e) { root.insertAdjacentHTML("beforeend", '<p style="color:var(--bad)">Ошибка виджета: ' + esc(e.message) + "</p>"); console.error(e); }
     });
     renderSidebar({ m: mid, l: lid }); window.scrollTo(0, 0);
-    typeset(() => { try { const b = content.querySelector(".lesson-body"); P.linkCitations(b); P.decorateTerms(b); } catch (e) { console.error(e); } });
+    typeset(() => { try { const b = content.querySelector(".lesson-body"); P.linkCitations(b); P.decorateTerms(b); if (Course.search && Course.search.pending) { const q = Course.search.pending; Course.search.pending = null; Course.search.highlight(content, q); } } catch (e) { console.error(e); } });
   }
 
   function glossary() {
@@ -176,6 +186,11 @@
 
   Course.app = { content: content, typeset: typeset, renderSidebar: renderSidebar, notFound: notFound, route: route, esc: esc };
 
+  const topSearch = $("#topSearch");
+  if (topSearch) {
+    topSearch.addEventListener("submit", (e) => { e.preventDefault(); const v = topSearch.querySelector("input").value.trim(); location.hash = "#/search/" + encodeURIComponent(v); topSearch.querySelector("input").blur(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ""))) { e.preventDefault(); topSearch.querySelector("input").focus(); } });
+  }
   $("#menuBtn").onclick = () => sidebar.classList.toggle("open");
   $("#themeBtn").onclick = () => {
     const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light");
