@@ -1,0 +1,7 @@
+node_modules/
+.claude/
+work/
+dash_data/
+Исследования-*/
+*.pdf
+*.log
