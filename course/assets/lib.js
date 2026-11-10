@@ -15,9 +15,17 @@
   Course.extend = function (id, ext) {
     const m = Course.modules.find((x) => x.id === id);
     if (!m) throw new Error("Course.extend: нет модуля " + id);
-    (ext.lessons || []).forEach((l) => m.lessons.push(l));
+    const placed = [], tail = [];
+    (ext.lessons || []).forEach((l) => (l.after ? placed : tail).push(l));
+    tail.forEach((l) => m.lessons.push(l));
     const n = (l) => +((/l(\d+)$/.exec(l.id) || [])[1] || 0);
     m.lessons.sort((a, b) => n(a) - n(b));
+    /* Урок с полем after: «id» встаёт сразу после указанного урока (чтобы вставлять в середину, не переименовывая id и не теряя прогресс). */
+    placed.forEach((l) => {
+      const i = m.lessons.findIndex((x) => x.id === l.after);
+      if (i < 0) throw new Error("Course.extend: нет урока " + l.after);
+      m.lessons.splice(i + 1, 0, l);
+    });
     (ext.terms || []).forEach((t) => m.terms.push(t));
   };
 
